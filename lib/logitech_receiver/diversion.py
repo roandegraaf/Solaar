@@ -50,7 +50,7 @@ from .common import NamedInt
 from .hidpp20 import SupportedFeature
 from .special_keys import CONTROL
 
-gi.require_version("Gdk", "3.0")  # isort:skip
+gi.require_version("Gdk", "4.0")  # isort:skip
 from gi.repository import Gdk, GLib  # NOQA: E402 # isort:skip
 
 if typing.TYPE_CHECKING:
@@ -99,9 +99,13 @@ _BUTTON_PRESS = 3
 CLICK, DEPRESS, RELEASE = "click", "depress", "release"
 
 gdisplay = Gdk.Display.get_default()  # can be None if Solaar is run without a full window system
-gkeymap = Gdk.Keymap.get_for_display(gdisplay) if gdisplay else None
+# Gdk.Keymap was removed in GTK4. Solaar's rule engine used it to read the
+# current modifier state and look up keycode ↔ keysym entries. The rule
+# engine degrades gracefully when gkeymap is None (Wayland already hits
+# this path), so in GTK4 we leave it None and rely on evdev / X11 fallbacks.
+gkeymap = None
 if logger.isEnabledFor(logging.INFO):
-    logger.info("GDK Keymap %sset up", "" if gkeymap else "not ")
+    logger.info("GDK Keymap not set up (GTK4 has no Gdk.Keymap)")
 
 wayland = os.getenv("WAYLAND_DISPLAY")  # is this Wayland?
 if wayland:

@@ -75,7 +75,7 @@ setup(
         "python-xlib (>= 0.27)",
         "psutil (>= 5.4.3)",
         'dbus-python ; platform_system=="Linux"',
-        "PyGObject",
+        "PyGObject (>= 3.50)",
         "typing_extensions",
     ],
     extras_require={

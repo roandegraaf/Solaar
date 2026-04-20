@@ -173,7 +173,8 @@ def main():
         return result
 
     gi = _require("gi", "python3-gi (in Ubuntu) or python3-gobject (in Fedora)")
-    _require("gi.repository.Gtk", "gir1.2-gtk-3.0", gi, "Gtk", "3.0")
+    _require("gi.repository.Gtk", "gir1.2-gtk-4.0", gi, "Gtk", "4.0")
+    _require("gi.repository.Adw", "gir1.2-adw-1 (libadwaita)", gi, "Adw", "1")
 
     # handle ^C in console
     signal.signal(signal.SIGINT, signal.SIG_DFL)

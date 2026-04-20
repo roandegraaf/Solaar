@@ -1,18 +1,10 @@
 ## Copyright (C) 2012-2013  Daniel Pavel
+## Copyright (C) 2014-2026  Solaar Contributors https://pwr-solaar.github.io/Solaar/
 ##
 ## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
 ## the Free Software Foundation; either version 2 of the License, or
 ## (at your option) any later version.
-##
-## This program is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License along
-## with this program; if not, write to the Free Software Foundation, Inc.,
-## 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 import logging
 
@@ -24,9 +16,10 @@ import gi
 from solaar.i18n import _
 from solaar.tasks import TaskRunner
 
-gi.require_version("Gtk", "3.0")
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Adw  # NOQA: E402
 from gi.repository import GLib  # NOQA: E402
-from gi.repository import Gtk  # NOQA: E402
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +64,14 @@ def _error_dialog(reason: ErrorReason, object_):
     logger.error("error: %s %s", reason, object_)
     title, text = _create_error_text(reason, object_)
 
-    m = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.ERROR, Gtk.ButtonsType.CLOSE, text)
-    m.set_title(title)
-    m.run()
-    m.destroy()
+    # GTK4: Adw.AlertDialog replaces Gtk.MessageDialog. Parent is resolved at present-time.
+    from solaar.ui.app import get_main_window
+
+    dialog = Adw.AlertDialog.new(title, text)
+    dialog.add_response("close", _("Close"))
+    dialog.set_default_response("close")
+    parent = get_main_window()
+    dialog.present(parent)
 
 
 def error_dialog(reason: ErrorReason, object_):
@@ -92,11 +89,12 @@ def start_async():
 
 def stop_async():
     global _task_runner
-    _task_runner.stop()
-    _task_runner = None
+    if _task_runner is not None:
+        _task_runner.stop()
+        _task_runner = None
 
 
 def ui_async(function, *args, **kwargs):
-    """Runs a function asynchronously."""
+    """Runs a function asynchronously on the UI task runner."""
     if _task_runner:
         _task_runner(function, *args, **kwargs)
