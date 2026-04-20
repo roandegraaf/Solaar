@@ -41,6 +41,16 @@ def get_main_window():
     return _main_window
 
 
+def _set_tray_visibility(visible: bool):
+    """Tell the tray icon whether the window is currently visible."""
+    try:
+        from solaar.ui import tray
+
+        tray.set_window_visible(visible)
+    except Exception:
+        pass
+
+
 class _DeviceRow(Gtk.ListBoxRow):
     """Sidebar row. Carries a reference to the device so the selection handler
     can map it back to a page."""
@@ -94,13 +104,17 @@ def _icon_name_for(device) -> str:
 
 
 class SolaarWindow(Adw.ApplicationWindow):
-    def __init__(self, application):
+    def __init__(self, application, hide_on_close: bool = True):
         super().__init__(application=application)
         self.set_title("Solaar")
         self.set_default_size(1000, 680)
 
+        self._hide_on_close = hide_on_close
         self._device_rows: dict[int, _DeviceRow] = {}
         self._device_pages: dict[int, Adw.NavigationPage] = {}
+
+        if hide_on_close:
+            self.connect("close-request", self._on_close_request)
 
         self._split = Adw.NavigationSplitView.new()
         self._split.set_max_sidebar_width(300)
@@ -190,6 +204,15 @@ class SolaarWindow(Adw.ApplicationWindow):
             if selected is not None and selected.device is device:
                 self._on_row_selected(self._device_list, selected)
 
+    # Hide instead of quit when the user clicks the window close button, so
+    # the tray icon / systemd service keep running in the background.
+    def _on_close_request(self, _window):
+        self.set_visible(False)
+        from solaar.ui import tray
+
+        tray.set_window_visible(False)
+        return True  # swallow the event — don't quit the app
+
 
 def run_loop(startup_hook, shutdown_hook, use_tray: bool, show_window: bool):
     """Main entry point called from solaar.gtk."""
@@ -198,28 +221,50 @@ def run_loop(startup_hook, shutdown_hook, use_tray: bool, show_window: bool):
     Adw.init()
     _app = Adw.Application.new(APP_ID, Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
 
+    def _toggle_window():
+        """Tray activate handler — show the window, or hide if already up."""
+        global _main_window
+        if _main_window is None:
+            _main_window = SolaarWindow(application=_app)
+        if _main_window.is_visible():
+            _main_window.set_visible(False)
+            _set_tray_visibility(False)
+        else:
+            _main_window.present()
+            _set_tray_visibility(True)
+
+    def _quit_application():
+        if _app is not None:
+            _app.quit()
+
     def _on_startup(app):
         logger.debug("startup")
         from solaar.ui import common as ui_common
         from solaar.ui import desktop_notifications
+        from solaar.ui import tray
 
         ui_common.start_async()
         desktop_notifications.init()
+        if use_tray:
+            tray.init(_toggle_window, _quit_application)
         startup_hook()
 
     def _on_activate(app):
         global _main_window
         if _main_window is None:
-            _main_window = SolaarWindow(application=app)
+            _main_window = SolaarWindow(application=app, hide_on_close=use_tray)
         if show_window:
             _main_window.present()
+            _set_tray_visibility(True)
 
     def _on_shutdown(app):
         logger.debug("shutdown")
         from solaar.ui import common as ui_common
         from solaar.ui import desktop_notifications
+        from solaar.ui import tray
 
         shutdown_hook()
+        tray.destroy()
         ui_common.stop_async()
         desktop_notifications.uninit()
 
