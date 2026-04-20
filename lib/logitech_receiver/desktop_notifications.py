@@ -36,7 +36,7 @@ def notifications_available():
         importlib.util.find_spec("gi.repository.Notify")
 
         notifications_supported = True
-    except ValueError as e:
+    except (ValueError, ImportError) as e:
         logger.warning(f"Notification service is not available: {e}")
     return notifications_supported
 
