@@ -28,6 +28,18 @@ install_dnf:
 	@echo "Installing Solaar dependencies via dnf"
 	sudo dnf install gtk3 python3-devel python3-gobject python3-dbus python3-pyudev python3-psutil python3-xlib python3-yaml
 
+install_bazzite:
+	@echo "Layering GTK4/libadwaita + Python bindings via rpm-ostree."
+	@echo "A reboot is required for rpm-ostree changes to take effect."
+	sudo rpm-ostree install python3-gobject python3-pyudev python3-psutil \
+		python3-xlib python3-yaml libadwaita gtk4 gobject-introspection hidapi
+	@echo "Now reboot, then run: make run-dev"
+
+run-dev:
+	@test -f bin/solaar || (echo "ERROR: run from the Solaar repo root" && exit 1)
+	@echo "Launching Solaar from source (gtk4-rewrite branch)."
+	PYTHONPATH=lib python3 bin/solaar $(ARGS)
+
 install_brew:
 	@echo "Installing Solaar dependencies via brew"
 	brew update
