@@ -49,15 +49,36 @@ run-dev:
 SOLAAR_USER_VENV := $(HOME)/.local/solaar
 SOLAAR_USER_BIN  := $(SOLAAR_USER_VENV)/bin/solaar
 SOLAAR_SYSTEMD_DIR := $(HOME)/.config/systemd/user
+SOLAAR_XDG_APPS := $(HOME)/.local/share/applications
+SOLAAR_XDG_ICONS := $(HOME)/.local/share/icons/hicolor
 
-install-user:
+install-user: install-user-venv install-user-xdg
+
+install-user-venv:
 	@test -f bin/solaar || (echo "ERROR: run from the Solaar repo root" && exit 1)
 	@echo "Creating venv at $(SOLAAR_USER_VENV) with system-site-packages."
 	python3 -m venv --system-site-packages $(SOLAAR_USER_VENV)
 	$(SOLAAR_USER_VENV)/bin/pip install --upgrade pip
 	$(SOLAAR_USER_VENV)/bin/pip install -e .
+
+install-user-xdg:
+	@echo "Installing .desktop launcher and icons under ~/.local/share"
+	mkdir -p $(SOLAAR_XDG_APPS)
+	# Copy the desktop file, rewriting Exec so it points at the user venv.
+	sed 's|^Exec=solaar|Exec=$(SOLAAR_USER_BIN)|' \
+		share/applications/solaar.desktop > $(SOLAAR_XDG_APPS)/solaar.desktop
+	# Icon files — scalable SVG + hand-drawn PNG sizes.
+	mkdir -p $(SOLAAR_XDG_ICONS)/scalable/apps
+	cp share/solaar/icons/solaar.svg $(SOLAAR_XDG_ICONS)/scalable/apps/solaar.svg 2>/dev/null || \
+		cp share/solaar/icons/solaar-init.svg $(SOLAAR_XDG_ICONS)/scalable/apps/solaar.svg
+	mkdir -p $(SOLAAR_XDG_ICONS)/32x32/apps
+	cp share/solaar/icons/solaar-light_100.png $(SOLAAR_XDG_ICONS)/32x32/apps/solaar.png 2>/dev/null || true
+	# Refresh caches so GNOME sees the new launcher immediately.
+	-update-desktop-database $(SOLAAR_XDG_APPS) 2>/dev/null
+	-gtk-update-icon-cache $(SOLAAR_XDG_ICONS) 2>/dev/null
 	@echo ""
 	@echo "Installed. Manual launch: $(SOLAAR_USER_BIN)"
+	@echo "Search for 'Solaar' in your app grid."
 	@echo "Autostart: make enable-autostart"
 
 enable-autostart:
@@ -78,7 +99,12 @@ disable-autostart:
 
 uninstall-user: disable-autostart
 	rm -rf $(SOLAAR_USER_VENV)
-	@echo "Removed $(SOLAAR_USER_VENV)"
+	rm -f $(SOLAAR_XDG_APPS)/solaar.desktop
+	rm -f $(SOLAAR_XDG_ICONS)/scalable/apps/solaar.svg
+	rm -f $(SOLAAR_XDG_ICONS)/32x32/apps/solaar.png
+	-update-desktop-database $(SOLAAR_XDG_APPS) 2>/dev/null
+	-gtk-update-icon-cache $(SOLAAR_XDG_ICONS) 2>/dev/null
+	@echo "Removed $(SOLAAR_USER_VENV) and XDG entries"
 
 install_brew:
 	@echo "Installing Solaar dependencies via brew"
