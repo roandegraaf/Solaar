@@ -109,10 +109,14 @@ class SolaarWindow(Adw.ApplicationWindow):
         sidebar_page.set_tag("sidebar")
         self._split.set_sidebar(sidebar_page)
 
-        # Content — placeholder until a device is selected
+        # Content — NavigationView lets us push per-device pages. It must live
+        # inside a NavigationPage because that's what NavigationSplitView.content
+        # expects.
         self._content_stack = Adw.NavigationView.new()
         self._content_stack.push(self._build_placeholder())
-        self._split.set_content(self._content_stack)
+        content_page = Adw.NavigationPage.new(self._content_stack, _("Solaar"))
+        content_page.set_tag("content")
+        self._split.set_content(content_page)
 
         self.set_content(self._split)
 
