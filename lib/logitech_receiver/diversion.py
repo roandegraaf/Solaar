@@ -762,11 +762,16 @@ class Setting(Condition):
         return {"Setting": self.args[:]}
 
 
+# GTK4 renamed MOD1_MASK -> ALT_MASK and MOD4_MASK was replaced by SUPER_MASK.
+# Fall back to the GTK3 names if the GTK4 names are unavailable.
+_ALT_MASK = getattr(Gdk.ModifierType, "ALT_MASK", None) or Gdk.ModifierType.MOD1_MASK
+_SUPER_MASK = getattr(Gdk.ModifierType, "SUPER_MASK", None) or Gdk.ModifierType.MOD4_MASK
+
 MODIFIERS = {
     "Shift": int(Gdk.ModifierType.SHIFT_MASK),
     "Control": int(Gdk.ModifierType.CONTROL_MASK),
-    "Alt": int(Gdk.ModifierType.MOD1_MASK),
-    "Super": int(Gdk.ModifierType.MOD4_MASK),
+    "Alt": int(_ALT_MASK),
+    "Super": int(_SUPER_MASK),
 }
 MODIFIER_MASK = MODIFIERS["Shift"] + MODIFIERS["Control"] + MODIFIERS["Alt"] + MODIFIERS["Super"]
 
