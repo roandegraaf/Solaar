@@ -188,14 +188,19 @@ def run(receivers, args, _find_receiver, find_device):
     try:
         import gi
 
-        gi.require_version("Gtk", "3.0")
+        gi.require_version("Gtk", "4.0")
         from gi.repository import Gio
         from gi.repository import Gtk
 
-        if Gtk.init_check()[0]:  # can Gtk be initialized?
+        # GTK4: Gtk.init() always succeeds on a working display; if it fails
+        # we just treat "no remote" rather than forcing a display dependency.
+        try:
+            Gtk.init()
             application = Gtk.Application.new(APP_ID, Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
             application.register()
             remote = application.get_is_remote()
+        except Exception:
+            remote = False
     except Exception:
         pass
 

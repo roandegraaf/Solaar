@@ -27,7 +27,6 @@ from collections import namedtuple
 from functools import partial
 from typing import Callable
 
-import gi
 import logitech_receiver
 
 from logitech_receiver import base
@@ -44,7 +43,6 @@ from .ui import common
 if typing.TYPE_CHECKING:
     from hidapi.common import DeviceInfo
 
-gi.require_version("Gtk", "3.0")  # NOQA: E402
 from gi.repository import GLib  # NOQA: E402 # isort:skip
 
 if typing.TYPE_CHECKING:
