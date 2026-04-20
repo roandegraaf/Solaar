@@ -126,21 +126,87 @@ def _build_range_row(setting) -> Adw.SpinRow:
     return row
 
 
+def _xy_keys_from_choices(choices_map):
+    """Find the X and Y NamedInt keys in a ChoicesMap, if both exist."""
+    x = y = None
+    for k in choices_map.keys():
+        name = str(k).upper()
+        if name == "X":
+            x = k
+        elif name == "Y":
+            y = k
+    return (x, y) if x is not None and y is not None else (None, None)
+
+
+def _write_dpi_xy(setting, x_key, y_key, value):
+    """Write the same DPI value to both X and Y in one go. Falls back to two
+    write_key_value calls if the setting doesn't support whole-dict writes."""
+    current = setting.read()
+    if isinstance(current, dict):
+        new_value = dict(current)
+        new_value[x_key] = value
+        new_value[y_key] = value
+        setting.write(new_value)
+    else:
+        setting.write_key_value(x_key, value)
+        setting.write_key_value(y_key, value)
+
+
+def _build_dpi_combo(setting, x_key, y_key, choices):
+    """One combo that drives both X and Y."""
+    row = Adw.ComboRow.new()
+    row.set_title(_("Sensitivity (DPI)"))
+    row.set_subtitle(_("Applied to X and Y together"))
+
+    current_map = setting.read()
+    current = current_map.get(x_key) if isinstance(current_map, dict) else None
+    values = _coarse_dpi_choices(list(choices), current)
+    model = Gtk.StringList.new([str(c) for c in values])
+    row.set_model(model)
+    try:
+        idx = values.index(current)
+    except ValueError:
+        idx = 0
+    row.set_selected(idx)
+
+    def _on_selected(r, _p):
+        selected = r.get_selected()
+        if 0 <= selected < len(values):
+            ui_async(_write_dpi_xy, setting, x_key, y_key, values[selected])
+
+    row.connect("notify::selected", _on_selected)
+    return row
+
+
 def _build_choices_map_row(setting) -> Adw.ExpanderRow:
-    """DPI X/Y/LOD, Backlight etc. — one group of sub-rows."""
+    """DPI X/Y/LOD, Backlight etc. — one group of sub-rows.
+
+    For DPI settings we fuse X and Y into a single combo so the user
+    doesn't see two near-identical rows that move together in practice.
+    """
     row = Adw.ExpanderRow.new()
     row.set_title(setting.label or setting.name)
     if setting.description:
         row.set_subtitle(setting.description)
 
+    choices_map = setting._validator.choices
     value = setting.read() or {}
-    for key, choices in setting._validator.choices.items():
+
+    fused_xy = False
+    x_key, y_key = (None, None)
+    if _is_dpi_key(setting.name):
+        x_key, y_key = _xy_keys_from_choices(choices_map)
+        if x_key is not None:
+            row.add_row(_build_dpi_combo(setting, x_key, y_key, choices_map[x_key]))
+            fused_xy = True
+
+    for key, choices in choices_map.items():
+        if fused_xy and key in (x_key, y_key):
+            continue
         sub = Adw.ComboRow.new()
         sub.set_title(str(key))
         values = list(choices)
         current = value.get(key) if isinstance(value, dict) else None
-        if _is_dpi_key(setting.name, key):
-            values = _coarse_dpi_choices(values, current)
         model = Gtk.StringList.new([str(c) for c in values])
         sub.set_model(model)
         try:
