@@ -1,0 +1,17 @@
+[Unit]
+Description=Solaar — Logitech device manager (GTK4 libadwaita)
+# Start once the user's graphical session is ready so the window can show.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+# %h expands to the user's home directory.
+ExecStart=%h/.local/solaar/bin/solaar --window hide
+# Auto-restart if the process exits (e.g. transient HID disconnect).
+Restart=on-failure
+RestartSec=5
+# Keep logs in the user journal; use `journalctl --user -u solaar` to read.
+
+[Install]
+WantedBy=graphical-session.target

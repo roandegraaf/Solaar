@@ -40,6 +40,46 @@ run-dev:
 	@echo "Launching Solaar from source (gtk4-rewrite branch)."
 	PYTHONPATH=lib python3 bin/solaar $(ARGS)
 
+# --- User-level install for Bazzite (no sudo, no system package) ---
+#
+# Creates a venv at ~/.local/solaar that can see the rpm-ostree-layered
+# python3-gobject, installs Solaar in editable mode, and wires up a systemd
+# user service so Solaar starts at login.
+
+SOLAAR_USER_VENV := $(HOME)/.local/solaar
+SOLAAR_USER_BIN  := $(SOLAAR_USER_VENV)/bin/solaar
+SOLAAR_SYSTEMD_DIR := $(HOME)/.config/systemd/user
+
+install-user:
+	@test -f bin/solaar || (echo "ERROR: run from the Solaar repo root" && exit 1)
+	@echo "Creating venv at $(SOLAAR_USER_VENV) with system-site-packages."
+	python3 -m venv --system-site-packages $(SOLAAR_USER_VENV)
+	$(SOLAAR_USER_VENV)/bin/pip install --upgrade pip
+	$(SOLAAR_USER_VENV)/bin/pip install -e .
+	@echo ""
+	@echo "Installed. Manual launch: $(SOLAAR_USER_BIN)"
+	@echo "Autostart: make enable-autostart"
+
+enable-autostart:
+	@test -x $(SOLAAR_USER_BIN) || (echo "ERROR: run 'make install-user' first" && exit 1)
+	mkdir -p $(SOLAAR_SYSTEMD_DIR)
+	cp systemd/solaar.service $(SOLAAR_SYSTEMD_DIR)/solaar.service
+	systemctl --user daemon-reload
+	systemctl --user enable --now solaar.service
+	@echo ""
+	@echo "Solaar is running. Check status:  systemctl --user status solaar"
+	@echo "View logs:                        journalctl --user -u solaar -f"
+	@echo "Disable autostart:                make disable-autostart"
+
+disable-autostart:
+	-systemctl --user disable --now solaar.service
+	rm -f $(SOLAAR_SYSTEMD_DIR)/solaar.service
+	systemctl --user daemon-reload
+
+uninstall-user: disable-autostart
+	rm -rf $(SOLAAR_USER_VENV)
+	@echo "Removed $(SOLAAR_USER_VENV)"
+
 install_brew:
 	@echo "Installing Solaar dependencies via brew"
 	brew update
