@@ -59,17 +59,40 @@ def _build_boolean_row(setting) -> Adw.SwitchRow:
     return row
 
 
+def _coarse_dpi_choices(choices, current, step=100):
+    """Drop DPI list to multiples of `step`. The device supports every 50-DPI
+    step (or finer), which floods the dropdown. Keep the current value in the
+    list even when it isn't a multiple of the step, so the combo can select it.
+    """
+    coarse = [c for c in choices if int(c) % step == 0]
+    if current is not None and current not in coarse:
+        try:
+            coarse = sorted([*coarse, current], key=int)
+        except Exception:
+            pass
+    return coarse
+
+
+def _is_dpi_key(setting_name, key=None) -> bool:
+    if key is not None:
+        return str(key).upper() in ("X", "Y") and setting_name.startswith("dpi")
+    return setting_name.startswith("dpi")
+
+
 def _build_choice_row(setting) -> Adw.ComboRow:
     row = Adw.ComboRow.new()
     row.set_title(setting.label or setting.name)
     if setting.description:
         row.set_subtitle(setting.description)
 
-    model = Gtk.StringList.new([str(choice) for choice in setting.choices])
-    row.set_model(model)
-
     current = setting.read()
     values = list(setting.choices)
+    if _is_dpi_key(setting.name):
+        values = _coarse_dpi_choices(values, current)
+
+    model = Gtk.StringList.new([str(choice) for choice in values])
+    row.set_model(model)
+
     try:
         idx = values.index(current)
     except ValueError:
@@ -114,11 +137,14 @@ def _build_choices_map_row(setting) -> Adw.ExpanderRow:
     for key, choices in setting._validator.choices.items():
         sub = Adw.ComboRow.new()
         sub.set_title(str(key))
-        model = Gtk.StringList.new([str(c) for c in choices])
-        sub.set_model(model)
         values = list(choices)
+        current = value.get(key) if isinstance(value, dict) else None
+        if _is_dpi_key(setting.name, key):
+            values = _coarse_dpi_choices(values, current)
+        model = Gtk.StringList.new([str(c) for c in values])
+        sub.set_model(model)
         try:
-            idx = values.index(value.get(key))
+            idx = values.index(current)
         except (ValueError, AttributeError):
             idx = 0
         sub.set_selected(idx)
