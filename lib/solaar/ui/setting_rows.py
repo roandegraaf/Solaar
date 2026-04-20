@@ -126,6 +126,22 @@ def _build_range_row(setting) -> Adw.SpinRow:
     return row
 
 
+_KEY_LABELS = {
+    "LOD": (
+        "Lift-off distance",
+        "How high you can lift the mouse before it stops tracking. "
+        "Lower values let you reposition without moving the cursor.",
+    ),
+    "X": ("Horizontal sensitivity", None),
+    "Y": ("Vertical sensitivity", None),
+}
+
+
+def _friendly_labels_for_key(key):
+    name = str(key).upper()
+    return _KEY_LABELS.get(name, (str(key), None))
+
+
 def _xy_keys_from_choices(choices_map):
     """Find the X and Y NamedInt keys in a ChoicesMap, if both exist."""
     x = y = None
@@ -204,7 +220,10 @@ def _build_choices_map_row(setting) -> Adw.ExpanderRow:
         if fused_xy and key in (x_key, y_key):
             continue
         sub = Adw.ComboRow.new()
-        sub.set_title(str(key))
+        title, subtitle = _friendly_labels_for_key(key)
+        sub.set_title(title)
+        if subtitle:
+            sub.set_subtitle(subtitle)
         values = list(choices)
         current = value.get(key) if isinstance(value, dict) else None
         model = Gtk.StringList.new([str(c) for c in values])
