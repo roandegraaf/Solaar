@@ -907,3 +907,84 @@ def test_check_feature_setting(test, mocker):
     setting = settings_templates.check_feature_setting(device, tst.sclass.name)
 
     assert setting
+
+
+# --- DPI auto-host-mode tests ---
+#
+# When onboard profiles are enabled, the mouse uses its stored profile DPI and
+# silently drops HID++ DPI writes. The AdjustableDpi setting must switch the
+# device to host mode before the write so the change actually applies.
+
+
+def _build_dpi_with_onboard_device(onboard_enabled):
+    """Fake device exposing ADJUSTABLE_DPI at 0x04 + ONBOARD_PROFILES at 0x0C."""
+    responses = [
+        # DPI feature: info query, dpi-list, read current, write new value
+        fake_hidpp.Response("000190032006400000", 0x0410, "000000"),
+        fake_hidpp.Response("000190", 0x0420),
+        fake_hidpp.Response("000320", 0x0430, "000320"),
+        # Onboard profiles: state + host-mode switch
+        fake_hidpp.Response("01" if onboard_enabled else "02", 0x0C20),
+        fake_hidpp.Response("02", 0x0C10, "02"),
+    ]
+    device = fake_hidpp.Device(
+        responses=responses,
+        feature=hidpp20_constants.SupportedFeature.ADJUSTABLE_DPI,
+        offset=0x04,
+        version=0x03,
+    )
+    # Mark ONBOARD_PROFILES as already discovered so the helper doesn't probe for it.
+    device.features[hidpp20_constants.SupportedFeature.ONBOARD_PROFILES] = 0x0C
+    return device
+
+
+def test_dpi_write_switches_to_host_mode_when_onboard_profiles_enabled(mocker):
+    device = _build_dpi_with_onboard_device(onboard_enabled=True)
+    spy_request = mocker.spy(device, "request")
+
+    setting = settings_templates.check_feature(device, settings_templates.AdjustableDpi)
+    assert setting is not None
+    value = setting.write(800)
+
+    assert value == 800
+    switch_calls = [c for c in spy_request.call_args_list if c.args[0] == 0x0C10]
+    assert len(switch_calls) == 1, "expected one host-mode switch request (0x0C10 with b'\\x02')"
+    assert switch_calls[0].args[1] == b"\x02"
+
+
+def test_dpi_write_does_not_switch_when_onboard_profiles_disabled(mocker):
+    device = _build_dpi_with_onboard_device(onboard_enabled=False)
+    spy_request = mocker.spy(device, "request")
+
+    setting = settings_templates.check_feature(device, settings_templates.AdjustableDpi)
+    assert setting is not None
+    value = setting.write(800)
+
+    assert value == 800
+    switch_calls = [c for c in spy_request.call_args_list if c.args[0] == 0x0C10]
+    assert switch_calls == [], "host-mode switch should not be sent when onboard profiles are disabled"
+
+
+def test_dpi_write_does_not_switch_when_onboard_profiles_feature_absent(mocker):
+    # Only DPI feature present; no ONBOARD_PROFILES at all.
+    responses = [
+        fake_hidpp.Response("000190032006400000", 0x0410, "000000"),
+        fake_hidpp.Response("000190", 0x0420),
+        fake_hidpp.Response("000320", 0x0430, "000320"),
+    ]
+    device = fake_hidpp.Device(
+        responses=responses,
+        feature=hidpp20_constants.SupportedFeature.ADJUSTABLE_DPI,
+        offset=0x04,
+        version=0x03,
+    )
+    spy_request = mocker.spy(device, "request")
+
+    setting = settings_templates.check_feature(device, settings_templates.AdjustableDpi)
+    assert setting is not None
+    value = setting.write(800)
+
+    assert value == 800
+    # No 0x0Cxx requests at all (no onboard-profile feature lookups beyond the root probe)
+    onboard_calls = [c for c in spy_request.call_args_list if c.args[0] == 0x0C10]
+    assert onboard_calls == []

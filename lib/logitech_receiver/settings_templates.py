@@ -987,6 +987,29 @@ class DivertKeys(settings.Settings):
             return validator
 
 
+def _ensure_host_mode_for_dpi_write(device):
+    """Switch device from Onboard-profile mode to Host mode so a DPI write takes effect.
+
+    When onboard profiles are active, the mouse uses its stored profile DPI and
+    silently rejects HID++ DPI writes. Returns True if a mode switch was issued.
+    Only acts when ONBOARD_PROFILES was already discovered on the device, so we
+    don't probe for the feature on mice that obviously don't have it.
+    """
+    # dict.get bypasses the lazy FeaturesArray lookup — avoids a spurious HID++
+    # probe on devices/tests that haven't enumerated ONBOARD_PROFILES yet.
+    if dict.get(device.features, _F.ONBOARD_PROFILES) in (None, False):
+        return False
+    try:
+        status = device.feature_request(_F.ONBOARD_PROFILES, 0x20)
+    except Exception:
+        return False
+    if not status or status[0] != 0x01:
+        return False
+    device.feature_request(_F.ONBOARD_PROFILES, 0x10, b"\x02")
+    logger.info("%s: switched to host mode so DPI change takes effect", device)
+    return True
+
+
 def produce_dpi_list(feature, function, ignore, device, direction):
     dpi_bytes = b""
     for i in range(0, 0x100):  # there will be only a very few iterations performed
@@ -1016,10 +1039,14 @@ def produce_dpi_list(feature, function, ignore, device, direction):
 class AdjustableDpi(settings.Setting):
     name = "dpi"
     label = _("Sensitivity (DPI)")
-    description = _("Mouse movement sensitivity") + "\n" + _("May need Onboard Profiles set to Disable to be effective.")
+    description = _("Mouse movement sensitivity")
     feature = _F.ADJUSTABLE_DPI
     rw_options = {"read_fnid": 0x20, "write_fnid": 0x30}
     choices_universe = common.NamedInts.range(100, 4000, str, 50)
+
+    def write(self, value, save=True):
+        _ensure_host_mode_for_dpi_write(self._device)
+        return super().write(value, save)
 
     class validator_class(settings_validator.ChoicesValidator):
         @classmethod
@@ -1044,7 +1071,7 @@ class ExtendedAdjustableDpi(settings.Setting):
     # the extended version allows for two dimensions, longer dpi descriptions, but still assume only one sensor
     name = "dpi_extended"
     label = _("Sensitivity (DPI)")
-    description = _("Mouse movement sensitivity") + "\n" + _("May need Onboard Profiles set to Disable to be effective.")
+    description = _("Mouse movement sensitivity")
     feature = _F.EXTENDED_ADJUSTABLE_DPI
     rw_options = {"read_fnid": 0x50, "write_fnid": 0x60}
     keys_universe = common.NamedInts(X=0, Y=1, LOD=2)
@@ -1053,6 +1080,10 @@ class ExtendedAdjustableDpi(settings.Setting):
     choices_universe[2] = "MEDIUM"
     choices_universe[3] = "HIGH"
     keys = common.NamedInts(X=0, Y=1, LOD=2)
+
+    def write(self, value, save=True):
+        _ensure_host_mode_for_dpi_write(self._device)
+        return super().write(value, save)
 
     def write_key_value(self, key, value, save=True):
         # Force a read to populate the full X/Y/LOD dictionary if it's missing (fixes CLI)
