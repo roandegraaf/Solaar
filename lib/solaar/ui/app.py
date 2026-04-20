@@ -79,7 +79,9 @@ class _DeviceRow(Gtk.ListBoxRow):
 
 
 def _icon_name_for(device) -> str:
-    kind = (getattr(device, "kind", None) or "").lower()
+    # device.kind is a NamedInt (e.g. NamedInt(2, "mouse")); str() gives the name.
+    kind_value = getattr(device, "kind", None)
+    kind = str(kind_value).lower() if kind_value is not None else ""
     mapping = {
         "mouse": "input-mouse-symbolic",
         "keyboard": "input-keyboard-symbolic",
